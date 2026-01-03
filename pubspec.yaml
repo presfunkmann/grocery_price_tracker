@@ -42,11 +42,15 @@ dependencies:
   path_provider: ^2.1.0
   path: ^1.8.0
 
-  # OCR (commented out for simulator testing - add back for device builds)
-  # google_mlkit_text_recognition: ^0.11.0
+  # OCR (requires physical device - doesn't work on arm64 simulator)
+  google_mlkit_text_recognition: ^0.11.0
 
   # Camera/Image
   image_picker: ^1.0.0
+
+  # API & Security
+  http: ^1.1.0
+  flutter_secure_storage: ^9.0.0
 
   # Charts
   fl_chart: ^0.65.0

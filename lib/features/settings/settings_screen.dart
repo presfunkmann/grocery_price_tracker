@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/services/currency_converter.dart';
+import '../../core/services/receipt_parser_service.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/settings_provider.dart';
 
@@ -14,6 +15,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _exchangeRateController = TextEditingController();
+  final _parserService = ReceiptParserService();
+  bool _hasApiKey = false;
 
   @override
   void initState() {
@@ -21,6 +24,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // Initialize with current exchange rate
     final settings = ref.read(displaySettingsProvider);
     _exchangeRateController.text = settings.exchangeRate.toStringAsFixed(4);
+    _checkApiKey();
+  }
+
+  Future<void> _checkApiKey() async {
+    final hasKey = await _parserService.hasApiKey();
+    if (mounted) {
+      setState(() {
+        _hasApiKey = hasKey;
+      });
+    }
   }
 
   @override
@@ -104,6 +117,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const Divider(),
 
+          // Receipt Scanning / AI
+          _buildSectionHeader(context, 'Receipt Scanning'),
+          ListTile(
+            leading: Icon(
+              _hasApiKey ? Icons.check_circle : Icons.warning,
+              color: _hasApiKey ? Colors.green : Colors.orange,
+            ),
+            title: const Text('Claude API Key'),
+            subtitle: Text(_hasApiKey
+                ? 'API key configured'
+                : 'Required for AI receipt parsing'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_hasApiKey)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _showRemoveApiKeyDialog(context),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () => _showApiKeyDialog(context),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'The API key is stored securely on your device and used to parse receipts with Claude AI. '
+              'Get your API key from console.anthropic.com',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          const Divider(),
+
           // Data Management
           _buildSectionHeader(context, 'Data'),
           ListTile(
@@ -172,6 +225,131 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               }
             },
             child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showApiKeyDialog(BuildContext context) {
+    final controller = TextEditingController();
+    bool isLoading = false;
+    String? errorMessage;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Claude API Key'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Enter your Claude API key:'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'API Key',
+                  hintText: 'sk-ant-...',
+                  border: const OutlineInputBorder(),
+                  errorText: errorMessage,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Get your API key from console.anthropic.com',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      final key = controller.text.trim();
+                      if (key.isEmpty) {
+                        setDialogState(() {
+                          errorMessage = 'Please enter an API key';
+                        });
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isLoading = true;
+                        errorMessage = null;
+                      });
+
+                      // Test the API key
+                      final (isValid, error) = await _parserService.testApiKey(key);
+
+                      if (isValid) {
+                        await _parserService.setApiKey(key);
+                        await _checkApiKey();
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(
+                                content: Text('API key saved successfully!')),
+                          );
+                        }
+                      } else {
+                        setDialogState(() {
+                          isLoading = false;
+                          errorMessage = error ?? 'Invalid API key. Please check and try again.';
+                        });
+                      }
+                    },
+              child: isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRemoveApiKeyDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove API Key?'),
+        content: const Text(
+          'This will remove your stored API key. You will need to enter it again to use receipt scanning.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () async {
+              await _parserService.clearApiKey();
+              await _checkApiKey();
+              if (context.mounted) {
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(content: Text('API key removed')),
+                );
+              }
+            },
+            child: const Text('Remove'),
           ),
         ],
       ),
