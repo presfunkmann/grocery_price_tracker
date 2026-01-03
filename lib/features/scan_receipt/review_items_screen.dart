@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +28,7 @@ class ReviewItemsScreen extends ConsumerStatefulWidget {
 
 class _ReviewItemsScreenState extends ConsumerState<ReviewItemsScreen> {
   late List<ParsedReceiptItem> _items;
+  late String? _storeName;
   DateTime _purchaseDate = DateTime.now();
   bool _isSaving = false;
 
@@ -33,6 +36,7 @@ class _ReviewItemsScreenState extends ConsumerState<ReviewItemsScreen> {
   void initState() {
     super.initState();
     _items = List.from(widget.parsedReceipt.items);
+    _storeName = widget.parsedReceipt.storeName;
   }
 
   Future<void> _saveSelectedItems() async {
@@ -69,17 +73,16 @@ class _ReviewItemsScreenState extends ConsumerState<ReviewItemsScreen> {
 
         // Get or create store if we have one
         int? storeId;
-        if (widget.parsedReceipt.storeName != null) {
+        if (_storeName != null && _storeName!.isNotEmpty) {
           final stores = await db.getAllStores();
           final existingStore = stores.where(
-            (s) => s.name.toLowerCase() ==
-                widget.parsedReceipt.storeName!.toLowerCase(),
+            (s) => s.name.toLowerCase() == _storeName!.toLowerCase(),
           );
           if (existingStore.isNotEmpty) {
             storeId = existingStore.first.id;
           } else {
             storeId = await db.insertStore(
-              StoresCompanion.insert(name: widget.parsedReceipt.storeName!),
+              StoresCompanion.insert(name: _storeName!),
             );
           }
         }
@@ -142,49 +145,51 @@ class _ReviewItemsScreenState extends ConsumerState<ReviewItemsScreen> {
     );
   }
 
-  void _showRawText() {
-    showModalBottomSheet(
+  void _showReceiptImage() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black87,
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return _DismissibleImageViewer(imagePath: widget.receiptImagePath);
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+
+  void _editStoreName() {
+    final controller = TextEditingController(text: _storeName ?? '');
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Text(
-                    'Raw OCR Text',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: SingleChildScrollView(
-                controller: scrollController,
-                padding: const EdgeInsets.all(16),
-                child: SelectableText(
-                  widget.rawOcrText,
-                  style: const TextStyle(fontFamily: 'monospace'),
-                ),
-              ),
-            ),
-          ],
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Store Name'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Store name',
+            hintText: 'e.g., Costco, Walmart',
+            border: OutlineInputBorder(),
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              setState(() {
+                _storeName = controller.text.isNotEmpty ? controller.text : null;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }
@@ -201,9 +206,9 @@ class _ReviewItemsScreenState extends ConsumerState<ReviewItemsScreen> {
         title: const Text('Review Items'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.text_snippet),
-            tooltip: 'View raw text',
-            onPressed: _showRawText,
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'View receipt image',
+            onPressed: _showReceiptImage,
           ),
         ],
       ),
@@ -216,19 +221,46 @@ class _ReviewItemsScreenState extends ConsumerState<ReviewItemsScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.parsedReceipt.storeName ?? 'Unknown Store',
-                        style: Theme.of(context).textTheme.titleMedium,
+                  child: InkWell(
+                    onTap: _editStoreName,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        _storeName ?? 'Unknown Store',
+                                        style: Theme.of(context).textTheme.titleMedium,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.edit,
+                                      size: 16,
+                                      color: Theme.of(context).colorScheme.outline,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${_items.length} items found',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_items.length} items found',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 OutlinedButton.icon(
@@ -672,6 +704,91 @@ class _EditItemSheetState extends ConsumerState<_EditItemSheet> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DismissibleImageViewer extends StatefulWidget {
+  final String imagePath;
+
+  const _DismissibleImageViewer({required this.imagePath});
+
+  @override
+  State<_DismissibleImageViewer> createState() => _DismissibleImageViewerState();
+}
+
+class _DismissibleImageViewerState extends State<_DismissibleImageViewer> {
+  double _dragOffset = 0;
+  double _opacity = 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onVerticalDragUpdate: (details) {
+        setState(() {
+          _dragOffset += details.delta.dy;
+          // Fade out as user drags down
+          _opacity = (1 - (_dragOffset.abs() / 300)).clamp(0.5, 1.0);
+        });
+      },
+      onVerticalDragEnd: (details) {
+        // If dragged more than 100 pixels or with enough velocity, dismiss
+        if (_dragOffset.abs() > 100 ||
+            details.velocity.pixelsPerSecond.dy.abs() > 500) {
+          Navigator.of(context).pop();
+        } else {
+          // Reset position
+          setState(() {
+            _dragOffset = 0;
+            _opacity = 1.0;
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black.withOpacity(_opacity),
+        body: Stack(
+          children: [
+            // Tap anywhere to close
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+            // The image
+            Transform.translate(
+              offset: Offset(0, _dragOffset),
+              child: Center(
+                child: InteractiveViewer(
+                  minScale: 0.5,
+                  maxScale: 4.0,
+                  child: Image.file(
+                    File(widget.imagePath),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            // Hint text at top
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              left: 0,
+              right: 0,
+              child: Opacity(
+                opacity: _opacity,
+                child: const Text(
+                  'Swipe down or tap to close',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
+                ),
               ),
             ),
           ],

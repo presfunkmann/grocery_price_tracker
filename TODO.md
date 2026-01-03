@@ -2,9 +2,9 @@
 
 ## Feedback & Changes
 
-- [ ] **Receipt image reference** - View receipt photo while reviewing/editing parsed items (needs planning)
-- [ ] **Edit store name** - Allow editing store name in review screen after scan
-- [ ] **Swipe to delete** - Delete purchases from history by swiping
+- [x] **Receipt image reference** - Tap receipt icon in app bar to view zoomable receipt image
+- [x] **Edit store name** - Tap store name in review screen header to edit
+- [x] **Swipe to delete** - Swipe left on purchase history items to delete (with confirmation)
 
 ## Bugs
 

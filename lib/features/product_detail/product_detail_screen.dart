@@ -316,20 +316,63 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             '${Currency.fromCode(purchase.currency)?.symbol ?? '\$'}${purchase.price.toStringAsFixed(2)}',
           );
 
-          return ListTile(
-            title: Text(
-              converter.formatPricePerUnit(
-                displayPrice,
-                targetCurrency,
-                targetUnit,
-              ),
+          return Dismissible(
+            key: Key('purchase_${purchase.id}'),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              color: Colors.red,
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 16),
+              child: const Icon(Icons.delete, color: Colors.white),
             ),
-            subtitle: Text(subtitleParts.join(' • ')),
-            trailing: displayPrice < avgPrice
-                ? const Icon(Icons.thumb_up, color: Colors.green, size: 20)
-                : displayPrice > avgPrice * 1.1
-                    ? const Icon(Icons.thumb_down, color: Colors.red, size: 20)
-                    : null,
+            confirmDismiss: (direction) async {
+              return await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Delete Purchase?'),
+                  content: const Text(
+                    'This will permanently remove this purchase from your history.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              ) ?? false;
+            },
+            onDismissed: (direction) async {
+              final db = ref.read(databaseProvider);
+              await db.deletePurchase(purchase.id);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Purchase deleted')),
+                );
+              }
+            },
+            child: ListTile(
+              title: Text(
+                converter.formatPricePerUnit(
+                  displayPrice,
+                  targetCurrency,
+                  targetUnit,
+                ),
+              ),
+              subtitle: Text(subtitleParts.join(' • ')),
+              trailing: displayPrice < avgPrice
+                  ? const Icon(Icons.thumb_up, color: Colors.green, size: 20)
+                  : displayPrice > avgPrice * 1.1
+                      ? const Icon(Icons.thumb_down, color: Colors.red, size: 20)
+                      : null,
+            ),
           );
         }),
       ],

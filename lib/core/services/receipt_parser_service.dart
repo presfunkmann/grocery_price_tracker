@@ -242,11 +242,15 @@ Parse each item and return JSON with this exact structure:
 
 Rules:
 1. Match products to existing ones by name similarity (Spanish/English)
-2. Extract weight/quantity from item description (e.g., "1.5kg", "2 LB")
+2. IMPORTANT: Distinguish between PACKAGE SIZE and ACTUAL QUANTITY:
+   - Package size appears in product name (e.g., "unidad:250g", "bolsa 500g") - IGNORE this
+   - Actual quantity is what was purchased (e.g., "Final 0.6 kg", "1.5 kg", "x2")
+   - Look for "Final", "Cant", "Qty" or standalone weight near the price
+   - If price-per-unit is shown (e.g., "\$88.5/kg"), use it to validate: quantity = total_price / price_per_unit
 3. Detect organic/variant keywords: ORG, ORGANICO, ORGANIC
 4. Price is the total for that line item
 5. Use "unit" for countable items without weight
-6. Standardize names to English (PECHUGA = Chicken Breast)
+6. Standardize names to English (PECHUGA = Chicken Breast, Pimiento = Bell Pepper)
 7. Only return valid JSON, no explanation''';
   }
 
