@@ -25,6 +25,46 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   String? _selectedBrandFilter;
   bool _showComparison = false;
 
+  void _editProductName(BuildContext context, Product product) {
+    final controller = TextEditingController(text: product.name);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Product Name'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Product name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty && newName != product.name) {
+                final db = ref.read(databaseProvider);
+                await db.updateProduct(product.copyWith(name: newName));
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+                setState(() {}); // Refresh the screen
+              } else {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.read(databaseProvider);
@@ -44,7 +84,21 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(product.name),
+            title: GestureDetector(
+              onTap: () => _editProductName(context, product),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(child: Text(product.name)),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.edit,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  ),
+                ],
+              ),
+            ),
             actions: [
               TextButton.icon(
                 onPressed: () {

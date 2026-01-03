@@ -103,7 +103,6 @@ class _ReviewItemsScreenState extends ConsumerState<ReviewItemsScreen> {
             unit: item.unit,
             pricePerUnit: pricePerUnit,
             purchaseDate: _purchaseDate,
-            receiptImagePath: Value(widget.receiptImagePath),
           ),
         );
 

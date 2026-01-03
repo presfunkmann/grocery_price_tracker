@@ -154,14 +154,96 @@ class HomeScreen extends ConsumerWidget {
         final latestPurchase = latestPurchaseByProduct[product.id];
         final productPurchases = allPurchasesByProduct[product.id] ?? [];
 
-        return _ProductCard(
-          product: product,
-          latestPurchase: latestPurchase,
-          allPurchases: productPurchases,
-          settings: settings,
+        return Dismissible(
+          key: Key('product_${product.id}'),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            color: Colors.red,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 16),
+            child: const Icon(Icons.delete_forever, color: Colors.white),
+          ),
+          confirmDismiss: (direction) async {
+            return await _showDeleteConfirmation(context, product, productPurchases.length);
+          },
+          onDismissed: (direction) async {
+            final db = ref.read(databaseProvider);
+            // Delete all purchases for this product first
+            for (final purchase in productPurchases) {
+              await db.deletePurchase(purchase.id);
+            }
+            // Then delete the product
+            await db.deleteProduct(product.id);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('${product.name} deleted')),
+            );
+          },
+          child: _ProductCard(
+            product: product,
+            latestPurchase: latestPurchase,
+            allPurchases: productPurchases,
+            settings: settings,
+          ),
         );
       },
     );
+  }
+
+  Future<bool> _showDeleteConfirmation(
+    BuildContext context,
+    Product product,
+    int purchaseCount,
+  ) async {
+    final controller = TextEditingController();
+
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          final isDeleteTyped = controller.text.toUpperCase() == 'DELETE';
+
+          return AlertDialog(
+            title: Text('Delete ${product.name}?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'WARNING: This will permanently delete this product and all $purchaseCount purchase records. This cannot be undone.',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                const SizedBox(height: 16),
+                const Text('Type DELETE to confirm:'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'DELETE',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: isDeleteTyped ? Colors.red : Colors.grey,
+                ),
+                onPressed: isDeleteTyped ? () => Navigator.pop(context, true) : null,
+                child: const Text('Delete'),
+              ),
+            ],
+          );
+        },
+      ),
+    ) ?? false;
   }
 }
 
