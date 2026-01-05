@@ -421,11 +421,26 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 ),
               ),
               subtitle: Text(subtitleParts.join(' • ')),
-              trailing: displayPrice < avgPrice
-                  ? const Icon(Icons.thumb_up, color: Colors.green, size: 20)
-                  : displayPrice > avgPrice * 1.1
-                      ? const Icon(Icons.thumb_down, color: Colors.red, size: 20)
-                      : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (displayPrice < avgPrice)
+                    const Icon(Icons.thumb_up, color: Colors.green, size: 20)
+                  else if (displayPrice > avgPrice * 1.1)
+                    const Icon(Icons.thumb_down, color: Colors.red, size: 20),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => AddPurchaseScreen(
+                      existingPurchase: purchase,
+                    ),
+                  ),
+                );
+              },
             ),
           );
         }),
@@ -672,16 +687,23 @@ class _PriceChart extends StatelessWidget {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
+              interval: 1,
               getTitlesWidget: (value, meta) {
-                final index = value.toInt();
-                if (index >= 0 && index < sortedPurchases.length) {
-                  return Text(
-                    DateFormat.MMMd()
-                        .format(sortedPurchases[index].purchaseDate),
-                    style: const TextStyle(fontSize: 10),
+                final index = value.round();
+                // Only show label if value is close to an integer (handles floating point)
+                if ((value - index).abs() < 0.01 &&
+                    index >= 0 &&
+                    index < sortedPurchases.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      DateFormat.MMMd()
+                          .format(sortedPurchases[index].purchaseDate),
+                      style: const TextStyle(fontSize: 10),
+                    ),
                   );
                 }
-                return const Text('');
+                return const SizedBox.shrink();
               },
             ),
           ),

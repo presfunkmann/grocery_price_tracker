@@ -10,8 +10,13 @@ import '../../providers/database_provider.dart';
 
 class AddPurchaseScreen extends ConsumerStatefulWidget {
   final int? preselectedProductId;
+  final Purchase? existingPurchase;
 
-  const AddPurchaseScreen({super.key, this.preselectedProductId});
+  const AddPurchaseScreen({
+    super.key,
+    this.preselectedProductId,
+    this.existingPurchase,
+  });
 
   @override
   ConsumerState<AddPurchaseScreen> createState() => _AddPurchaseScreenState();
@@ -36,6 +41,7 @@ class _AddPurchaseScreenState extends ConsumerState<AddPurchaseScreen> {
 
   List<String> _existingVariants = [];
   List<String> _existingBrands = [];
+  bool _isLoading = false;
 
   final List<String> _defaultVariants = [
     'Regular',
@@ -61,13 +67,54 @@ class _AddPurchaseScreenState extends ConsumerState<AddPurchaseScreen> {
     'Other',
   ];
 
+  bool get _isEditing => widget.existingPurchase != null;
+
   @override
   void initState() {
     super.initState();
     _loadExistingData();
-    if (widget.preselectedProductId != null) {
+    if (widget.existingPurchase != null) {
+      _loadExistingPurchase();
+    } else if (widget.preselectedProductId != null) {
       _loadPreselectedProduct();
     }
+  }
+
+  Future<void> _loadExistingPurchase() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final purchase = widget.existingPurchase!;
+    final db = ref.read(databaseProvider);
+
+    // Load product
+    final product = await db.getProductById(purchase.productId);
+
+    // Load store name if exists
+    String? storeName;
+    if (purchase.storeId != null) {
+      final stores = await db.getAllStores();
+      final store = stores.where((s) => s.id == purchase.storeId).firstOrNull;
+      storeName = store?.name;
+    }
+
+    setState(() {
+      _selectedProduct = product;
+      _productNameController.text = product.name;
+      _selectedUnit = purchase.unit;
+      _selectedCategory = product.category;
+      _isNewProduct = false;
+      _priceController.text = purchase.price.toString();
+      _quantityController.text = purchase.quantity.toString();
+      _selectedCurrency = Currency.fromCode(purchase.currency) ?? Currency.MXN;
+      _selectedVariant = purchase.variant;
+      _brandController.text = purchase.brand ?? '';
+      _storeController.text = storeName ?? '';
+      _purchaseDate = purchase.purchaseDate;
+      _notesController.text = purchase.notes ?? '';
+      _isLoading = false;
+    });
   }
 
   Future<void> _loadExistingData() async {
@@ -108,9 +155,18 @@ class _AddPurchaseScreenState extends ConsumerState<AddPurchaseScreen> {
     final productsAsync = ref.watch(productsStreamProvider);
     final storesAsync = ref.watch(storesStreamProvider);
 
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(_isEditing ? 'Edit Purchase' : 'Add Purchase'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Purchase'),
+        title: Text(_isEditing ? 'Edit Purchase' : 'Add Purchase'),
       ),
       body: Form(
         key: _formKey,
@@ -256,6 +312,9 @@ class _AddPurchaseScreenState extends ConsumerState<AddPurchaseScreen> {
               loading: () => const LinearProgressIndicator(),
               error: (e, st) => Text('Error: $e'),
               data: (stores) => Autocomplete<String>(
+                initialValue: _storeController.text.isNotEmpty
+                    ? TextEditingValue(text: _storeController.text)
+                    : null,
                 optionsBuilder: (textEditingValue) {
                   if (textEditingValue.text.isEmpty) {
                     return stores.map((s) => s.name);
@@ -326,7 +385,7 @@ class _AddPurchaseScreenState extends ConsumerState<AddPurchaseScreen> {
             FilledButton.icon(
               onPressed: _savePurchase,
               icon: const Icon(Icons.save),
-              label: const Text('Save Purchase'),
+              label: Text(_isEditing ? 'Update Purchase' : 'Save Purchase'),
             ),
             const SizedBox(height: 16),
           ],
@@ -448,6 +507,9 @@ class _AddPurchaseScreenState extends ConsumerState<AddPurchaseScreen> {
 
   Widget _buildBrandField() {
     return Autocomplete<String>(
+      initialValue: _brandController.text.isNotEmpty
+          ? TextEditingValue(text: _brandController.text)
+          : null,
       optionsBuilder: (textEditingValue) {
         if (textEditingValue.text.isEmpty) {
           return _existingBrands;
@@ -515,9 +577,9 @@ class _AddPurchaseScreenState extends ConsumerState<AddPurchaseScreen> {
         }
       }
 
-      // Create purchase
-      await db.insertPurchase(
-        PurchasesCompanion.insert(
+      // Create or update purchase
+      if (_isEditing) {
+        final updatedPurchase = widget.existingPurchase!.copyWith(
           productId: productId,
           storeId: Value(storeId),
           variant: Value(_selectedVariant),
@@ -533,12 +595,33 @@ class _AddPurchaseScreenState extends ConsumerState<AddPurchaseScreen> {
           notes: Value(_notesController.text.isNotEmpty
               ? _notesController.text
               : null),
-        ),
-      );
+        );
+        await db.updatePurchase(updatedPurchase);
+      } else {
+        await db.insertPurchase(
+          PurchasesCompanion.insert(
+            productId: productId,
+            storeId: Value(storeId),
+            variant: Value(_selectedVariant),
+            brand: Value(_brandController.text.isNotEmpty
+                ? _brandController.text.trim()
+                : null),
+            price: price,
+            currency: _selectedCurrency.code,
+            quantity: quantity,
+            unit: _selectedUnit,
+            pricePerUnit: pricePerUnit,
+            purchaseDate: _purchaseDate,
+            notes: Value(_notesController.text.isNotEmpty
+                ? _notesController.text
+                : null),
+          ),
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Purchase saved!')),
+          SnackBar(content: Text(_isEditing ? 'Purchase updated!' : 'Purchase saved!')),
         );
         Navigator.of(context).pop();
       }

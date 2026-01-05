@@ -159,38 +159,41 @@ class _ReviewItemsScreenState extends ConsumerState<ReviewItemsScreen> {
     );
   }
 
-  void _editStoreName() {
+  void _editStoreName() async {
     final controller = TextEditingController(text: _storeName ?? '');
-    showDialog(
+    final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Edit Store Name'),
         content: TextField(
           controller: controller,
           autofocus: true,
+          textCapitalization: TextCapitalization.words,
           decoration: const InputDecoration(
             labelText: 'Store name',
             hintText: 'e.g., Costco, Walmart',
             border: OutlineInputBorder(),
           ),
+          onSubmitted: (_) => Navigator.pop(dialogContext, controller.text),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
-              setState(() {
-                _storeName = controller.text.isNotEmpty ? controller.text : null;
-              });
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
             child: const Text('Save'),
           ),
         ],
       ),
     );
+
+    if (result != null) {
+      setState(() {
+        _storeName = result.isNotEmpty ? result : null;
+      });
+    }
   }
 
   @override

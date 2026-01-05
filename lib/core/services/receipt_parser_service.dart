@@ -248,10 +248,15 @@ Rules:
    - Look for "Final", "Cant", "Qty" or standalone weight near the price
    - If price-per-unit is shown (e.g., "\$88.5/kg"), use it to validate: quantity = total_price / price_per_unit
 3. Detect organic/variant keywords: ORG, ORGANICO, ORGANIC
-4. Price is the total for that line item
-5. Use "unit" for countable items without weight
-6. Standardize names to English (PECHUGA = Chicken Breast, Pimiento = Bell Pepper)
-7. Only return valid JSON, no explanation''';
+4. IMPORTANT: Handle DISCOUNTS that appear on a separate line below the item:
+   - Look for negative amounts, "DESCUENTO", "DESC", "AHORRO", "DISCOUNT", "SAVE", "-\$X.XX"
+   - The discount line often appears directly below the item it applies to
+   - Subtract the discount from the item's price to get the final price
+   - Do NOT create a separate item for the discount line
+5. Price should be the FINAL price paid after any discounts
+6. Use "unit" for countable items without weight
+7. Standardize names to English (PECHUGA = Chicken Breast, Pimiento = Bell Pepper)
+8. Only return valid JSON, no explanation''';
   }
 
   /// Parse a receipt using Claude API
